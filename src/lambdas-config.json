@@ -1,0 +1,98 @@
+{
+  "environment": {
+    "AWS_REGION": "us-east-1",
+    "ENVIRONMENT": "development"
+  },
+  "lambdas": [
+    {
+      "name": "AuthorsDataProvider",
+      "type": "javascript",
+      "handler": "./lambdas/authors-data-provider",
+      "handlerFunction": "handler",
+      "description": "Provides author data"
+    },
+    {
+      "name": "BooksDataProvider",
+      "type": "javascript",
+      "handler": "./lambdas/books-data-provider",
+      "handlerFunction": "handler",
+      "description": "Provides book data"
+    },
+    {
+      "name": "GreetDataSource",
+      "type": "javascript",
+      "handler": "./lambdas/greet",
+      "handlerFunction": "handler",
+      "description": "Greets a list of names (TypeScript)"
+    },
+    {
+      "name": "DotNetGreetingDataSource",
+      "type": "dotnet",
+      "projectPath": "./dotnet-lambdas/Greeting",
+      "functionHandler": "Greeting::Greeting.Function::FunctionHandler",
+      "description": "Greets a list of names (.NET)"
+    },
+    {
+      "name": "GetAgeDataSource",
+      "type": "javascript",
+      "handler": "./lambdas/get-age",
+      "handlerFunction": "handler",
+      "description": "Gets age from DynamoDB by name",
+      "environment": {
+        "DYNAMODB_ENDPOINT": "disabled",
+        "TABLE_NAME": "People"
+      }
+    }
+  ],
+  "resolvers": [
+    {
+      "typeName": "Query",
+      "fieldName": "books",
+      "dataSourceName": "BooksDataProvider",
+      "requestTemplate": "default.js",
+      "responseTemplate": "default.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "authors",
+      "dataSourceName": "AuthorsDataProvider",
+      "requestTemplate": "default.js",
+      "responseTemplate": "default.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "greet",
+      "dataSourceName": "GreetDataSource",
+      "requestTemplate": "greet.js",
+      "responseTemplate": "greet.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "greetDotNet",
+      "dataSourceName": "DotNetGreetingDataSource",
+      "requestTemplate": "greet-dotnet.js",
+      "responseTemplate": "greet-dotnet.js"
+    },
+    {
+      "typeName": "Book",
+      "fieldName": "author",
+      "dataSourceName": "AuthorsDataProvider",
+      "requestTemplate": "default.js",
+      "responseTemplate": "default.js"
+    },
+    {
+      "typeName": "Author",
+      "fieldName": "books",
+      "dataSourceName": "BooksDataProvider",
+      "requestTemplate": "default.js",
+      "responseTemplate": "default.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "getAge",
+      "dataSourceName": "GetAgeDataSource",
+      "requestTemplate": "default.js",
+      "responseTemplate": "default.js"
+    }
+  ]
+}

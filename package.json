@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "serve": "ts-node-dev src/main.ts"
+    "serve": "ts-node-dev src/main.ts",
+    "dynamodb:start": "docker-compose up -d",
+    "dynamodb:stop": "docker-compose down",
+    "dynamodb:seed": "ts-node scripts/seed-dynamodb.ts"
   },
   "repository": {
     "type": "git",
@@ -18,13 +21,18 @@
   },
   "homepage": "https://github.com/Cox65/appsync-simulator-starter-kit#readme",
   "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
     "@types/aws-lambda": "^8.10.109",
+    "@types/babel__core": "^7.20.0",
     "@types/node": "^18.11.18",
     "ts-node": "^10.9.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^4.9.4"
   },
   "dependencies": {
-    "amplify-appsync-simulator": "^2.4.1"
+    "amplify-appsync-simulator": "^2.4.1",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0"
   }
 }

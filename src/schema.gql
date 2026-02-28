@@ -11,6 +11,9 @@ type Author {
 type Query {
   books: [Book]
   authors: [Author]
+  greet(names: [String!]!): [String]
+  greetDotNet(names: [String!]!): [String]
+  getAge(name: String!): Int
 }
 
 type Mutation {

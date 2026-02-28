@@ -102,3 +102,31 @@ dist
 
 # TernJS port file
 .tern-port
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# .NET
+dotnet-lambdas/**/bin/
+dotnet-lambdas/**/obj/
+dotnet-lambdas/**/*.user
+dotnet-lambdas/**/*.suo
+dotnet-lambdas/**/*.cache
+dotnet-lambdas/**/.vs/
+
+# Docker volumes
+docker-data/
