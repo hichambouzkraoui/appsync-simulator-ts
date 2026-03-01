@@ -63,8 +63,8 @@ class AppSyncSimulator {
                 }
             } else if (lambda.type === 'dotnet') {
                 handlers[lambda.name] = createDotNetHandler({
-                    projectPath: resolve(__dirname, '..', lambda.projectPath!),
-                    functionHandler: lambda.functionHandler,
+                    projectPath: lambda.projectPath!,
+                    functionHandler: lambda.functionHandler!,
                     environment: {
                         ...this.lambdaConfig.environment,
                         ...lambda.environment

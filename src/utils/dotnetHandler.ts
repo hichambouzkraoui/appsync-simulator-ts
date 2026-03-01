@@ -1,92 +1,112 @@
 import { Handler } from 'aws-lambda';
 import { spawn } from 'child_process';
+import { resolve as resolvePath } from 'path';
 
 export interface DotNetLambdaConfig {
   projectPath: string;
-  functionHandler?: string;
+  functionHandler: string;
   environment?: Record<string, string>;
 }
 
 /**
- * Create a .NET Lambda handler that spawns dotnet-lambda-test-tool-8.0
- * This follows the same pattern as index.js for invoking .NET Lambdas
+ * Create a .NET Lambda handler that invokes via dotnet lambda-test-tool-8.0 --no-ui
+ * This approach spawns a process per invocation but avoids HTTP server permission issues
  */
 export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
   return async (event: any) => {
+    console.log('[DotNet Lambda] Invoking .NET Lambda');
+    console.log('[DotNet Lambda] Project:', config.projectPath);
+    console.log('[DotNet Lambda] Event:', JSON.stringify(event, null, 2));
+    
     return new Promise((resolve, reject) => {
-      console.log('[DotNet Lambda] Invoking .NET Lambda');
-      console.log('[DotNet Lambda] Event:', JSON.stringify(event, null, 2));
-      
-      const projectPath = config.projectPath;
+      const projectPath = resolvePath(config.projectPath);
       const payload = JSON.stringify(event);
       
-      // Merge environment variables
-      const mergedEnv = {
-        ...process.env,
-        ...config.environment
-      };
-      
-      // Invoke Lambda Test Tool with --no-ui and --payload for one-time execution
       const args = [
+        'lambda-test-tool-8.0',
         '--no-ui',
-        '--payload', payload
+        '--payload',
+        payload,
+        '--function-handler',
+        config.functionHandler
       ];
       
-      // Add function handler if specified
-      if (config.functionHandler) {
-        args.push('--function-handler', config.functionHandler);
-      }
+      console.log('[DotNet Lambda] Executing: dotnet ' + args.join(' '));
+      console.log('[DotNet Lambda] Working directory:', projectPath);
       
-      console.log(`[DotNet Lambda] Executing: dotnet-lambda-test-tool-8.0 ${args.join(' ')}`);
-      console.log(`[DotNet Lambda] Working directory: ${projectPath}`);
-      
-      const lambdaTest = spawn('dotnet-lambda-test-tool-8.0', args, {
+      const lambdaProcess = spawn('dotnet', args, {
         cwd: projectPath,
-        env: mergedEnv,
-        stdio: ['pipe', 'pipe', 'pipe']
+        env: {
+          ...process.env,
+          ...config.environment,
+          // Prevent the tool from trying to read console input
+          NO_COLOR: '1'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
       });
       
       let stdout = '';
       let stderr = '';
       let resultFound = false;
       
-      lambdaTest.stdout.on('data', (data) => {
+      lambdaProcess.stdout.on('data', (data) => {
         const output = data.toString();
         stdout += output;
-        console.log(`[DotNet Lambda] ${output}`);
+        
+        // Filter out expected console input errors from Lambda Test Tool
+        if (output.includes('Cannot read keys when either application does not have a console') ||
+            output.includes('Unknown error occurred causing process exit')) {
+          // This is expected when running in --no-ui mode, ignore it
+          return;
+        }
+        
+        console.log(`[DotNet Lambda] ${output.trim()}`);
         
         // Look for the response in the output
         // Lambda Test Tool outputs: Response:\n{json}
-        const responseMatch = output.match(/Response:\s*(\{[\s\S]*\})/);
+        const responseMatch = output.match(/Response:\s*(\{[\s\S]*?\})/);
         if (responseMatch && !resultFound) {
           resultFound = true;
           try {
             const result = JSON.parse(responseMatch[1]);
-            console.log('[DotNet Lambda] Result:', result);
+            console.log('[DotNet Lambda] Parsed result:', JSON.stringify(result, null, 2));
             
-            // Kill the process immediately after getting the response
-            lambdaTest.kill();
-            
+            // Kill the process after getting response
+            lambdaProcess.kill();
             resolve(result);
           } catch (e) {
-            console.log(`[DotNet Lambda] Failed to parse response: ${responseMatch[1]}`);
-            lambdaTest.kill();
+            console.log(`[DotNet Lambda] Failed to parse: ${responseMatch[1]}`);
+            lambdaProcess.kill();
             resolve(responseMatch[1]);
           }
         }
       });
       
-      lambdaTest.stderr.on('data', (data) => {
-        stderr += data.toString();
-        console.error(`[DotNet Lambda ERROR] ${data.toString()}`);
+      lambdaProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        
+        // Filter out expected console input errors from Lambda Test Tool
+        if (output.includes('Cannot read keys when either application does not have a console')) {
+          // This is expected when running in --no-ui mode, ignore it
+          return;
+        }
+        
+        console.error(`[DotNet Lambda ERROR] ${output.trim()}`);
       });
       
-      lambdaTest.on('close', (code) => {
-        console.log(`[DotNet Lambda] Process exited with code: ${code}`);
+      lambdaProcess.on('close', (code) => {
+        // Exit code 143 is SIGTERM (we killed it after getting response)
+        // Exit code 254 is expected from Lambda Test Tool after successful execution
+        if (code === 143 || code === 254) {
+          console.log(`[DotNet Lambda] Process completed (exit code ${code})`);
+        } else {
+          console.log(`[DotNet Lambda] Process exited with code: ${code}`);
+        }
         
         if (!resultFound) {
           // Try to extract result from stdout
-          const responseMatch = stdout.match(/Response:\s*(\{[\s\S]*\})/);
+          const responseMatch = stdout.match(/Response:\s*(\{[\s\S]*?\})/);
           if (responseMatch) {
             try {
               const result = JSON.parse(responseMatch[1]);
@@ -94,16 +114,26 @@ export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
             } catch (e) {
               reject(new Error(`Failed to parse Lambda response: ${responseMatch[1]}`));
             }
-          } else if (code === 0) {
-            reject(new Error(`No response found in Lambda output. Exit code: ${code}`));
+          } else if (code === 143 || code === 254) {
+            // These exit codes are expected, but we didn't find a response
+            reject(new Error(`Lambda executed but no response found in output`));
           } else {
-            reject(new Error(`Lambda execution failed with exit code ${code}. stderr: ${stderr}`));
+            reject(new Error(
+              `No response found in Lambda output. Exit code: ${code}\n` +
+              `Stdout: ${stdout}\n` +
+              `Stderr: ${stderr}`
+            ));
           }
         }
       });
       
-      lambdaTest.on('error', (error) => {
-        reject(new Error(`Failed to spawn Lambda Test Tool: ${error.message}`));
+      lambdaProcess.on('error', (error) => {
+        console.error('[DotNet Lambda] Failed to spawn:', error.message);
+        reject(new Error(
+          `Failed to spawn Lambda Test Tool: ${error.message}\n` +
+          `Make sure dotnet lambda-test-tool-8.0 is installed:\n` +
+          `dotnet tool install -g Amazon.Lambda.TestTool-8.0`
+        ));
       });
     });
   };

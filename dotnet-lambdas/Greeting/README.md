@@ -1,6 +1,10 @@
-# .NET Greeting Lambda
+# .NET Greeting Lambda (Optional)
 
 A .NET 8 Lambda function that greets a list of names.
+
+## Note
+
+The .NET Lambda integration is currently experiencing issues with the Lambda Test Tool in non-interactive mode. The TypeScript/JavaScript `greet` Lambda provides the same functionality and works reliably.
 
 ## Prerequisites
 
@@ -14,11 +18,16 @@ cd dotnet-lambdas/Greeting
 dotnet build
 ```
 
-## Test Locally
+## Manual Testing
 
-The Lambda is automatically invoked by the AppSync simulator through the dotnet-lambda-test-tool-8.0.
+You can test the Lambda function manually using the Lambda Test Tool UI:
 
-## Input Format
+```bash
+cd dotnet-lambdas/Greeting
+dotnet lambda-test-tool-8.0
+```
+
+Then open the browser UI and test with:
 
 ```json
 {
@@ -26,7 +35,7 @@ The Lambda is automatically invoked by the AppSync simulator through the dotnet-
 }
 ```
 
-## Output Format
+## Expected Output
 
 ```json
 {
@@ -38,10 +47,10 @@ The Lambda is automatically invoked by the AppSync simulator through the dotnet-
 }
 ```
 
-## GraphQL Query
+## Known Issues
 
-```graphql
-query {
-  greetDotNet(names: ["John", "Jane", "Bob"])
-}
-```
+The Lambda Test Tool has issues running in `--no-ui` mode when spawned as a child process. This is a limitation of the tool itself. For production use, consider:
+
+1. Using the JavaScript/TypeScript Lambda functions (fully supported)
+2. Running the Lambda Test Tool as a standalone HTTP server
+3. Deploying to actual AWS Lambda where this issue doesn't occur
