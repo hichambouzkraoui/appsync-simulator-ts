@@ -1,3 +1,5 @@
+import { AppSyncSimulatorPipelineResolverConfig, AppSyncSimulatorUnitResolverConfig } from "amplify-appsync-simulator";
+
 export interface LambdaConfig {
   environment?: Record<string, string>;
   lambdas: LambdaDefinition[];
@@ -14,9 +16,9 @@ export interface LambdaDefinition {
   handler?: string;
   handlerFunction?: string;
   
-  // .NET Lambda properties
-  projectPath?: string;
-  functionHandler?: string;
+  // .NET Lambda properties (Hot Chocolate GraphQL endpoint)
+  endpoint?: string;
+  functionName?: string;
 }
 
 export interface ResolverDefinition {
@@ -26,3 +28,16 @@ export interface ResolverDefinition {
   requestTemplate?: string;
   responseTemplate?: string;
 }
+
+// Extended resolver config with interceptor support
+export interface InterceptorConfig {
+  requestTemplate?: string;
+  responseTemplate?: string;
+}
+
+export interface ExtendedResolverConfig extends Omit<AppSyncSimulatorUnitResolverConfig, 'kind'> {
+  kind: 'UNIT';
+  interceptor?: InterceptorConfig;
+}
+
+export type ResolverConfig = ExtendedResolverConfig | AppSyncSimulatorPipelineResolverConfig;

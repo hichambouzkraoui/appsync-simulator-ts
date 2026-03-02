@@ -28,9 +28,16 @@
     {
       "name": "DotNetGreetingDataSource",
       "type": "dotnet",
-      "projectPath": "./dotnet-lambdas/Greeting",
-      "functionHandler": "Greeting::Greeting.Function::FunctionHandler",
-      "description": "Greets a list of names (.NET)"
+      "endpoint": "http://localhost:5001/graphql",
+      "functionName": "greeting",
+      "description": "Greets a list of names (.NET via Hot Chocolate)"
+    },
+    {
+      "name": "DotNetCalculatorDataSource",
+      "type": "dotnet",
+      "endpoint": "http://localhost:5001/graphql",
+      "functionName": "calculator",
+      "description": "Performs arithmetic operations (.NET)"
     },
     {
       "name": "GetAgeDataSource",
@@ -93,6 +100,13 @@
       "dataSourceName": "GetAgeDataSource",
       "requestTemplate": "default.js",
       "responseTemplate": "default.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "calculate",
+      "dataSourceName": "DotNetCalculatorDataSource",
+      "requestTemplate": "calculator.js",
+      "responseTemplate": "calculator.js"
     }
   ]
 }

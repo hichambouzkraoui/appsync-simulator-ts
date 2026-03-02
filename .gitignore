@@ -127,6 +127,12 @@ dotnet-lambdas/**/*.user
 dotnet-lambdas/**/*.suo
 dotnet-lambdas/**/*.cache
 dotnet-lambdas/**/.vs/
+dotnet-server/bin/
+dotnet-server/obj/
+dotnet-server/**/*.user
+dotnet-server/**/*.suo
+dotnet-server/**/*.cache
+dotnet-server/.vs/
 
 # Docker volumes
 docker-data/

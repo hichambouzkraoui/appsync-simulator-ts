@@ -7,7 +7,9 @@
     "serve": "ts-node-dev src/main.ts",
     "dynamodb:start": "docker-compose up -d",
     "dynamodb:stop": "docker-compose down",
-    "dynamodb:seed": "ts-node scripts/seed-dynamodb.ts"
+    "dynamodb:seed": "ts-node scripts/seed-dynamodb.ts",
+    "dotnet:serve": "cd dotnet-server && dotnet run",
+    "dev": "npm run dotnet:serve & npm run serve"
   },
   "repository": {
     "type": "git",

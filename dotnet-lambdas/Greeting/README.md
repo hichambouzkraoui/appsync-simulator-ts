@@ -1,15 +1,12 @@
-# .NET Greeting Lambda (Optional)
+# .NET Greeting Lambda
 
 A .NET 8 Lambda function that greets a list of names.
-
-## Note
-
-The .NET Lambda integration is currently experiencing issues with the Lambda Test Tool in non-interactive mode. The TypeScript/JavaScript `greet` Lambda provides the same functionality and works reliably.
 
 ## Prerequisites
 
 - .NET 8 SDK
-- AWS Lambda Test Tool: `dotnet tool install -g Amazon.Lambda.TestTool-8.0`
+- AWS SAM CLI: `brew install aws-sam-cli` (macOS) or see [installation guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+- Docker (required by SAM CLI for local invocation)
 
 ## Build
 
@@ -18,17 +15,14 @@ cd dotnet-lambdas/Greeting
 dotnet build
 ```
 
-## Manual Testing
-
-You can test the Lambda function manually using the Lambda Test Tool UI:
+## Test Locally with SAM CLI
 
 ```bash
 cd dotnet-lambdas/Greeting
-dotnet lambda-test-tool-8.0
+sam local invoke GreetingFunction --event event.json
 ```
 
-Then open the browser UI and test with:
-
+Example `event.json`:
 ```json
 {
   "Names": ["John", "Jane", "Bob"]
@@ -43,14 +37,25 @@ Then open the browser UI and test with:
     "Hello JOHN from .NET!",
     "Hello JANE from .NET!",
     "Hello BOB from .NET!"
-  ]
+  }
 }
 ```
 
-## Known Issues
+## GraphQL Query
 
-The Lambda Test Tool has issues running in `--no-ui` mode when spawned as a child process. This is a limitation of the tool itself. For production use, consider:
+The Lambda is automatically invoked via SAM CLI when you query through AppSync:
 
-1. Using the JavaScript/TypeScript Lambda functions (fully supported)
-2. Running the Lambda Test Tool as a standalone HTTP server
-3. Deploying to actual AWS Lambda where this issue doesn't occur
+```bash
+npm run serve
+```
+
+Query:
+```graphql
+query {
+  greetDotNet(names: ["John", "Jane", "Bob"])
+}
+```
+
+## How It Works
+
+The AppSync simulator uses `sam local invoke` to execute the .NET Lambda function. This provides a reliable local testing environment that closely mimics AWS Lambda behavior.

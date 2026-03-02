@@ -1,140 +1,113 @@
 import { Handler } from 'aws-lambda';
-import { spawn } from 'child_process';
-import { resolve as resolvePath } from 'path';
+import { request } from 'http';
 
 export interface DotNetLambdaConfig {
-  projectPath: string;
-  functionHandler: string;
+  endpoint: string;
+  functionName: string;
   environment?: Record<string, string>;
 }
 
 /**
- * Create a .NET Lambda handler that invokes via dotnet lambda-test-tool-8.0 --no-ui
- * This approach spawns a process per invocation but avoids HTTP server permission issues
+ * Create a .NET Lambda handler that calls Hot Chocolate GraphQL server
+ * Uses a generic invokeLambda endpoint that accepts function name and payload
  */
 export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
   return async (event: any) => {
-    console.log('[DotNet Lambda] Invoking .NET Lambda');
-    console.log('[DotNet Lambda] Project:', config.projectPath);
+    console.log('[DotNet Lambda] Invoking via Hot Chocolate GraphQL server');
+    console.log('[DotNet Lambda] Function:', config.functionName);
+    console.log('[DotNet Lambda] Endpoint:', config.endpoint);
     console.log('[DotNet Lambda] Event:', JSON.stringify(event, null, 2));
     
     return new Promise((resolve, reject) => {
-      const projectPath = resolvePath(config.projectPath);
-      const payload = JSON.stringify(event);
-      
-      const args = [
-        'lambda-test-tool-8.0',
-        '--no-ui',
-        '--payload',
-        payload,
-        '--function-handler',
-        config.functionHandler
-      ];
-      
-      console.log('[DotNet Lambda] Executing: dotnet ' + args.join(' '));
-      console.log('[DotNet Lambda] Working directory:', projectPath);
-      
-      const lambdaProcess = spawn('dotnet', args, {
-        cwd: projectPath,
-        env: {
-          ...process.env,
-          ...config.environment,
-          // Prevent the tool from trying to read console input
-          NO_COLOR: '1'
-        },
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      
-      let stdout = '';
-      let stderr = '';
-      let resultFound = false;
-      
-      lambdaProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        stdout += output;
-        
-        // Filter out expected console input errors from Lambda Test Tool
-        if (output.includes('Cannot read keys when either application does not have a console') ||
-            output.includes('Unknown error occurred causing process exit')) {
-          // This is expected when running in --no-ui mode, ignore it
-          return;
+      // Build GraphQL mutation to invoke Lambda generically
+      const query = {
+        query: `query InvokeLambda($functionName: String!, $payload: String!) {
+          invokeLambda(functionName: $functionName, payload: $payload)
+        }`,
+        variables: {
+          functionName: config.functionName,
+          payload: JSON.stringify(event)
         }
+      };
+      
+      const payload = JSON.stringify(query);
+      const url = new URL(config.endpoint);
+      
+      // Use 127.0.0.1 instead of localhost to avoid IPv6 issues
+      const hostname = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname;
+      
+      const options = {
+        hostname: hostname,
+        port: url.port || 80,
+        path: url.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      };
+      
+      console.log('[DotNet Lambda] GraphQL Query:', query);
+      
+      const req = request(options, (res) => {
+        let data = '';
         
-        console.log(`[DotNet Lambda] ${output.trim()}`);
+        console.log('[DotNet Lambda] Response status:', res.statusCode);
+        console.log('[DotNet Lambda] Response headers:', res.headers);
         
-        // Look for the response in the output
-        // Lambda Test Tool outputs: Response:\n{json}
-        const responseMatch = output.match(/Response:\s*(\{[\s\S]*?\})/);
-        if (responseMatch && !resultFound) {
-          resultFound = true;
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          console.log('[DotNet Lambda] Response body:', data);
+          
+          if (res.statusCode !== 200) {
+            console.error('[DotNet Lambda] HTTP error:', res.statusCode, data);
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+            return;
+          }
+          
           try {
-            const result = JSON.parse(responseMatch[1]);
-            console.log('[DotNet Lambda] Parsed result:', JSON.stringify(result, null, 2));
+            const response = JSON.parse(data);
+            console.log('[DotNet Lambda] GraphQL Response:', JSON.stringify(response, null, 2));
             
-            // Kill the process after getting response
-            lambdaProcess.kill();
-            resolve(result);
-          } catch (e) {
-            console.log(`[DotNet Lambda] Failed to parse: ${responseMatch[1]}`);
-            lambdaProcess.kill();
-            resolve(responseMatch[1]);
-          }
-        }
-      });
-      
-      lambdaProcess.stderr.on('data', (data) => {
-        const output = data.toString();
-        stderr += output;
-        
-        // Filter out expected console input errors from Lambda Test Tool
-        if (output.includes('Cannot read keys when either application does not have a console')) {
-          // This is expected when running in --no-ui mode, ignore it
-          return;
-        }
-        
-        console.error(`[DotNet Lambda ERROR] ${output.trim()}`);
-      });
-      
-      lambdaProcess.on('close', (code) => {
-        // Exit code 143 is SIGTERM (we killed it after getting response)
-        // Exit code 254 is expected from Lambda Test Tool after successful execution
-        if (code === 143 || code === 254) {
-          console.log(`[DotNet Lambda] Process completed (exit code ${code})`);
-        } else {
-          console.log(`[DotNet Lambda] Process exited with code: ${code}`);
-        }
-        
-        if (!resultFound) {
-          // Try to extract result from stdout
-          const responseMatch = stdout.match(/Response:\s*(\{[\s\S]*?\})/);
-          if (responseMatch) {
-            try {
-              const result = JSON.parse(responseMatch[1]);
-              resolve(result);
-            } catch (e) {
-              reject(new Error(`Failed to parse Lambda response: ${responseMatch[1]}`));
+            if (response.errors) {
+              reject(new Error(`GraphQL errors: ${JSON.stringify(response.errors)}`));
+              return;
             }
-          } else if (code === 143 || code === 254) {
-            // These exit codes are expected, but we didn't find a response
-            reject(new Error(`Lambda executed but no response found in output`));
-          } else {
-            reject(new Error(
-              `No response found in Lambda output. Exit code: ${code}\n` +
-              `Stdout: ${stdout}\n` +
-              `Stderr: ${stderr}`
-            ));
+            
+            // Parse the Lambda response JSON string
+            const lambdaResult = JSON.parse(response.data.invokeLambda);
+            
+            console.log('[DotNet Lambda] Lambda Result:', JSON.stringify(lambdaResult, null, 2));
+            resolve(lambdaResult);
+          } catch (error) {
+            console.error('[DotNet Lambda] Failed to parse response:', data);
+            reject(new Error(`Failed to parse response: ${data}`));
           }
+        });
+      });
+      
+      req.on('error', (error: any) => {
+        console.error('[DotNet Lambda] Request error:', error.message);
+        console.error('[DotNet Lambda] Error code:', error.code);
+        
+        if (error.code === 'ECONNREFUSED') {
+          reject(new Error(
+            `Cannot connect to Hot Chocolate server at ${config.endpoint}.\n` +
+            `Make sure the .NET server is running:\n` +
+            `  Terminal 1: npm run dotnet:serve\n` +
+            `  Terminal 2: npm run serve\n` +
+            `Or manually: cd dotnet-server && dotnet run`
+          ));
+        } else {
+          reject(error);
         }
       });
       
-      lambdaProcess.on('error', (error) => {
-        console.error('[DotNet Lambda] Failed to spawn:', error.message);
-        reject(new Error(
-          `Failed to spawn Lambda Test Tool: ${error.message}\n` +
-          `Make sure dotnet lambda-test-tool-8.0 is installed:\n` +
-          `dotnet tool install -g Amazon.Lambda.TestTool-8.0`
-        ));
-      });
+      req.write(payload);
+      req.end();
     });
   };
 }

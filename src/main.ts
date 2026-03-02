@@ -7,8 +7,7 @@ import {
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { withInterceptors } from './interceptors/templateInterceptor'
-import { ResolverConfig } from './types/resolverConfig'
-import { LambdaConfig, LambdaDefinition } from './types/lambdaConfig'
+import { LambdaConfig, LambdaDefinition, ResolverConfig } from './types/lambdaConfig'
 import { createDotNetHandler } from './utils/dotnetHandler'
 import { schema } from "./schema"
 import { readVTL } from './vtl/readVTL'
@@ -63,8 +62,8 @@ class AppSyncSimulator {
                 }
             } else if (lambda.type === 'dotnet') {
                 handlers[lambda.name] = createDotNetHandler({
-                    projectPath: lambda.projectPath!,
-                    functionHandler: lambda.functionHandler!,
+                    endpoint: lambda.endpoint!,
+                    functionName: lambda.functionName!,
                     environment: {
                         ...this.lambdaConfig.environment,
                         ...lambda.environment
