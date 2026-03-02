@@ -1,5 +1,9 @@
 import { Handler } from 'aws-lambda';
-import { Author } from '../types/author';
+
+interface Author {
+  id: number;
+  name: string;
+}
 
 const authors: Author[] = [
   {

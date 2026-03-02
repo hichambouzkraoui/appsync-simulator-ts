@@ -13,10 +13,14 @@ export interface DotNetLambdaConfig {
  */
 export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
   return async (event: any) => {
-    console.log('[DotNet Lambda] Invoking via Hot Chocolate GraphQL server');
-    console.log('[DotNet Lambda] Function:', config.functionName);
-    console.log('[DotNet Lambda] Endpoint:', config.endpoint);
-    console.log('[DotNet Lambda] Event:', JSON.stringify(event, null, 2));
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║           .NET Lambda Handler - Request Flow                   ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('[DotNet Handler] 📥 Received event from interceptor');
+    console.log('[DotNet Handler] Function:', config.functionName);
+    console.log('[DotNet Handler] Endpoint:', config.endpoint);
+    console.log('[DotNet Handler] Event payload:', JSON.stringify(event, null, 2));
+    console.log();
     
     return new Promise((resolve, reject) => {
       // Build GraphQL mutation to invoke Lambda generically
@@ -47,32 +51,43 @@ export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
         }
       };
       
-      console.log('[DotNet Lambda] GraphQL Query:', query);
+      console.log('[DotNet Handler] 🔄 Building GraphQL request');
+      console.log('[DotNet Handler] Target:', `${hostname}:${url.port}${url.pathname}`);
+      console.log('[DotNet Handler] GraphQL Query:', JSON.stringify(query, null, 2));
+      console.log('[DotNet Handler] Payload size:', Buffer.byteLength(payload), 'bytes');
+      console.log();
       
       const req = request(options, (res) => {
         let data = '';
         
-        console.log('[DotNet Lambda] Response status:', res.statusCode);
-        console.log('[DotNet Lambda] Response headers:', res.headers);
+        console.log('[DotNet Handler] 📡 Response received from .NET server');
+        console.log('[DotNet Handler] Status:', res.statusCode);
+        console.log('[DotNet Handler] Headers:', JSON.stringify(res.headers, null, 2));
+        console.log();
         
         res.on('data', (chunk) => {
           data += chunk;
         });
         
         res.on('end', () => {
-          console.log('[DotNet Lambda] Response body:', data);
+          console.log('[DotNet Handler] 📦 Complete response body:', data);
+          console.log();
           
           if (res.statusCode !== 200) {
-            console.error('[DotNet Lambda] HTTP error:', res.statusCode, data);
+            console.error('[DotNet Handler] ❌ HTTP error:', res.statusCode);
+            console.error('[DotNet Handler] Response:', data);
+            console.log('╚════════════════════════════════════════════════════════════════╝\n');
             reject(new Error(`HTTP ${res.statusCode}: ${data}`));
             return;
           }
           
           try {
             const response = JSON.parse(data);
-            console.log('[DotNet Lambda] GraphQL Response:', JSON.stringify(response, null, 2));
+            console.log('[DotNet Handler] ✅ Parsed GraphQL response:', JSON.stringify(response, null, 2));
             
             if (response.errors) {
+              console.error('[DotNet Handler] ❌ GraphQL errors:', JSON.stringify(response.errors, null, 2));
+              console.log('╚════════════════════════════════════════════════════════════════╝\n');
               reject(new Error(`GraphQL errors: ${JSON.stringify(response.errors)}`));
               return;
             }
@@ -80,18 +95,23 @@ export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
             // Parse the Lambda response JSON string
             const lambdaResult = JSON.parse(response.data.invokeLambda);
             
-            console.log('[DotNet Lambda] Lambda Result:', JSON.stringify(lambdaResult, null, 2));
+            console.log('[DotNet Handler] 🎯 Lambda result (parsed):', JSON.stringify(lambdaResult, null, 2));
+            console.log('[DotNet Handler] ✅ Request completed successfully');
+            console.log('╚════════════════════════════════════════════════════════════════╝\n');
             resolve(lambdaResult);
           } catch (error) {
-            console.error('[DotNet Lambda] Failed to parse response:', data);
+            console.error('[DotNet Handler] ❌ Failed to parse response:', data);
+            console.error('[DotNet Handler] Error:', error);
+            console.log('╚════════════════════════════════════════════════════════════════╝\n');
             reject(new Error(`Failed to parse response: ${data}`));
           }
         });
       });
       
       req.on('error', (error: any) => {
-        console.error('[DotNet Lambda] Request error:', error.message);
-        console.error('[DotNet Lambda] Error code:', error.code);
+        console.error('[DotNet Handler] ❌ Request error:', error.message);
+        console.error('[DotNet Handler] Error code:', error.code);
+        console.log('╚════════════════════════════════════════════════════════════════╝\n');
         
         if (error.code === 'ECONNREFUSED') {
           reject(new Error(
@@ -106,6 +126,7 @@ export function createDotNetHandler(config: DotNetLambdaConfig): Handler {
         }
       });
       
+      console.log('[DotNet Handler] 📤 Sending HTTP request to .NET server...');
       req.write(payload);
       req.end();
     });

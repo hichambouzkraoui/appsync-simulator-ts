@@ -75,12 +75,20 @@ export function withInterceptors(handler: Handler, templatePath: string = 'defau
   return async (event: any, context?: any, callback?: any) => {
     const template = getTemplate(fullTemplatePath);
     
-    console.log('[Interceptor] === Request Phase ===');
-    console.log('[Interceptor] Original event:', JSON.stringify(event, null, 2));
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║              Template Interceptor - Request Flow               ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('[Interceptor] 📥 Received event from AppSync simulator');
+    console.log('[Interceptor] Template:', templatePath);
+    console.log('[Interceptor] Event keys:', Object.keys(event).join(', '));
+    console.log('[Interceptor] Field:', event.fieldName);
+    console.log('[Interceptor] Arguments:', JSON.stringify(event.arguments, null, 2));
+    console.log();
     
     // Apply request interceptor from template
     let transformedEvent = event;
     if (template.request) {
+      console.log('[Interceptor] 🔄 Applying request template transformation');
       const requestResult = template.request(event);
       console.log('[Interceptor] Template request result:', JSON.stringify(requestResult, null, 2));
       
@@ -88,16 +96,21 @@ export function withInterceptors(handler: Handler, templatePath: string = 'defau
       // Otherwise merge with the original event
       if (requestResult.payload) {
         transformedEvent = requestResult.payload;
-        console.log('[Interceptor] Using payload from template:', JSON.stringify(transformedEvent, null, 2));
+        console.log('[Interceptor] ✅ Using transformed payload from template');
+        console.log('[Interceptor] Transformed payload:', JSON.stringify(transformedEvent, null, 2));
       } else {
         transformedEvent = {
           ...event,
           ...requestResult
         };
+        console.log('[Interceptor] ✅ Merged template result with event');
       }
     }
+    console.log();
     
-    console.log('[Interceptor] === Invoking Handler ===');
+    console.log('[Interceptor] 🚀 Invoking handler with transformed event');
+    console.log('[Interceptor] Handler will receive:', JSON.stringify(transformedEvent, null, 2));
+    console.log();
     
     // Call the actual handler
     let result;
@@ -105,16 +118,22 @@ export function withInterceptors(handler: Handler, templatePath: string = 'defau
     
     try {
       result = await handler(transformedEvent, context, callback);
+      console.log('[Interceptor] ✅ Handler completed successfully');
     } catch (err: any) {
       error = {
         message: err.message,
         type: err.name || 'Error'
       };
-      console.error('[Interceptor] Handler error:', error);
+      console.error('[Interceptor] ❌ Handler error:', error);
     }
     
-    console.log('[Interceptor] === Response Phase ===');
-    console.log('[Interceptor] Handler result:', JSON.stringify(result, null, 2));
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║             Template Interceptor - Response Flow               ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('[Interceptor] 📦 Handler returned result');
+    console.log('[Interceptor] Result type:', typeof result);
+    console.log('[Interceptor] Result:', JSON.stringify(result, null, 2));
+    console.log();
     
     // Apply response interceptor from template
     const responseContext = {
@@ -124,9 +143,16 @@ export function withInterceptors(handler: Handler, templatePath: string = 'defau
     };
     
     if (template.response) {
+      console.log('[Interceptor] 🔄 Applying response template transformation');
       result = template.response(responseContext);
-      console.log('[Interceptor] Template response result:', JSON.stringify(result, null, 2));
+      console.log('[Interceptor] ✅ Template transformed response');
+      console.log('[Interceptor] Final result:', JSON.stringify(result, null, 2));
+    } else {
+      console.log('[Interceptor] ℹ️  No response template, using result as-is');
     }
+    
+    console.log('[Interceptor] 📤 Returning to AppSync simulator');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
     
     return result;
   };

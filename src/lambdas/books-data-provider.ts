@@ -1,5 +1,10 @@
 import { Handler } from 'aws-lambda';
-import { Book } from '../types/book';
+
+interface Book {
+  id: number;
+  title: string;
+  authorId: number;
+}
 
 const books: Book[] = [
   {
