@@ -70,7 +70,15 @@ function getTemplate(templatePath: string) {
 
 // Wrapper to apply template interceptors to any Lambda handler
 export function withInterceptors(handler: Handler, templatePath: string = 'default.js'): Handler {
-  const fullTemplatePath = resolve(__dirname, '../templates', templatePath);
+  // Support both full paths and relative filenames
+  // If templatePath is absolute or starts with ./ or ../, use it as-is
+  // Otherwise, resolve relative to templates directory
+  let fullTemplatePath: string;
+  if (templatePath.startsWith('/') || templatePath.startsWith('./') || templatePath.startsWith('../')) {
+    fullTemplatePath = resolve(templatePath);
+  } else {
+    fullTemplatePath = resolve(__dirname, '../templates', templatePath);
+  }
   
   return async (event: any, context?: any, callback?: any) => {
     const template = getTemplate(fullTemplatePath);

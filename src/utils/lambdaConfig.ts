@@ -12,13 +12,18 @@ export interface LambdaDefinition {
   description?: string;
   environment?: Record<string, string>;
   
-  // JavaScript Lambda properties
+  // JavaScript/TypeScript Lambda properties (direct invocation)
   handler?: string;
   handlerFunction?: string;
   
-  // .NET Lambda properties (Hot Chocolate GraphQL endpoint)
-  endpoint?: string;
+  // .NET Lambda properties
   functionName?: string;
+  
+  // AWS Lambda invocation (optional)
+  // - For JavaScript: If lambdaEndpoint is provided, uses AWS SDK; otherwise direct invocation
+  // - For .NET: Uses AWS SDK with lambdaEndpoint (defaults to LocalStack at http://localhost:4566)
+  lambdaEndpoint?: string;
+  lambdaRegion?: string;
 }
 
 export interface ResolverDefinition {
@@ -27,6 +32,7 @@ export interface ResolverDefinition {
   dataSourceName: string;
   requestTemplate?: string;
   responseTemplate?: string;
+  description?: string;
 }
 
 // Extended resolver config with interceptor support

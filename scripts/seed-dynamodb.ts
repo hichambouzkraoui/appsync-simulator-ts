@@ -8,10 +8,6 @@ const client = new DynamoDBClient({
   credentials: {
     accessKeyId: 'dummy',
     secretAccessKey: 'dummy'
-  },
-  requestHandler: {
-    requestTimeout: 5000,
-    connectionTimeout: 3000
   }
 });
 
@@ -33,15 +29,13 @@ const seedData = [
 async function testConnection() {
   console.log('🔍 Testing DynamoDB connection...');
   try {
-    await client.send(new DescribeTableCommand({ TableName: 'test' }));
+    const tables = await client.send(new (await import('@aws-sdk/client-dynamodb')).ListTablesCommand({}));
+    console.log('✅ DynamoDB connection successful');
+    return true;
   } catch (err: any) {
-    if (err.name === 'ResourceNotFoundException') {
-      console.log('✅ DynamoDB connection successful');
-      return true;
-    }
+    console.error('❌ Connection failed:', err.message);
     throw err;
   }
-  return true;
 }
 
 async function createTable() {

@@ -7,9 +7,7 @@
     "serve": "ts-node-dev src/main.ts",
     "dynamodb:start": "docker-compose up -d",
     "dynamodb:stop": "docker-compose down",
-    "dynamodb:seed": "ts-node scripts/seed-dynamodb.ts",
-    "dotnet:serve": "cd dotnet-server && dotnet run",
-    "dev": "npm run dotnet:serve & npm run serve"
+    "dynamodb:seed": "ts-node scripts/seed-dynamodb.ts"
   },
   "repository": {
     "type": "git",
@@ -35,6 +33,7 @@
   "dependencies": {
     "amplify-appsync-simulator": "^2.4.1",
     "@aws-sdk/client-dynamodb": "^3.450.0",
-    "@aws-sdk/lib-dynamodb": "^3.450.0"
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
+    "@aws-sdk/client-lambda": "^3.450.0"
   }
 }

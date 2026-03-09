@@ -26,18 +26,20 @@
       "description": "Greets a list of names (TypeScript)"
     },
     {
-      "name": "DotNetGreetingDataSource",
+      "name": "GreetDotNetDataSource",
       "type": "dotnet",
-      "endpoint": "http://localhost:5001/graphql",
       "functionName": "greeting",
-      "description": "Greets a list of names (.NET via Hot Chocolate)"
+      "description": "Greets a list of names (.NET Lambda)",
+      "lambdaEndpoint": "http://localhost:4566",
+      "lambdaRegion": "us-east-1"
     },
     {
-      "name": "DotNetCalculatorDataSource",
+      "name": "CalculatorDataSource",
       "type": "dotnet",
-      "endpoint": "http://localhost:5001/graphql",
       "functionName": "calculator",
-      "description": "Performs arithmetic operations (.NET)"
+      "description": "Performs arithmetic operations (.NET Lambda)",
+      "lambdaEndpoint": "http://localhost:4566",
+      "lambdaRegion": "us-east-1"
     },
     {
       "name": "GetAgeDataSource",
@@ -46,7 +48,7 @@
       "handlerFunction": "handler",
       "description": "Gets age from DynamoDB by name",
       "environment": {
-        "DYNAMODB_ENDPOINT": "disabled",
+        "DYNAMODB_ENDPOINT": "http://localhost:8000",
         "TABLE_NAME": "People"
       }
     }
@@ -76,9 +78,16 @@
     {
       "typeName": "Query",
       "fieldName": "greetDotNet",
-      "dataSourceName": "DotNetGreetingDataSource",
+      "dataSourceName": "GreetDotNetDataSource",
       "requestTemplate": "greet-dotnet.js",
       "responseTemplate": "greet-dotnet.js"
+    },
+    {
+      "typeName": "Query",
+      "fieldName": "calculate",
+      "dataSourceName": "CalculatorDataSource",
+      "requestTemplate": "calculator.js",
+      "responseTemplate": "calculator.js"
     },
     {
       "typeName": "Book",
@@ -100,13 +109,6 @@
       "dataSourceName": "GetAgeDataSource",
       "requestTemplate": "default.js",
       "responseTemplate": "default.js"
-    },
-    {
-      "typeName": "Query",
-      "fieldName": "calculate",
-      "dataSourceName": "DotNetCalculatorDataSource",
-      "requestTemplate": "calculator.js",
-      "responseTemplate": "calculator.js"
     }
   ]
 }

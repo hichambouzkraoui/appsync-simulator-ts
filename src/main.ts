@@ -6,11 +6,11 @@ import {
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { withInterceptors } from './interceptors/templateInterceptor'
-import { LambdaConfig, LambdaDefinition, ResolverConfig } from './types/lambdaConfig'
-import { createDotNetHandler } from './utils/dotnetHandler'
-import { schema } from "./schema"
-import { readVTL } from './vtl/readVTL'
+import { withInterceptors } from './utils/templateInterceptor'
+import { LambdaConfig, LambdaDefinition, ResolverConfig } from './utils/lambdaConfig'
+import { createLambdaHandler, LambdaInvoker } from './utils/lambdaInvoker'
+import { schema } from "./utils/schema"
+import { readVTL } from './utils/readVTL'
 import { RESOLVER_KIND } from 'amplify-appsync-simulator'
 
 
@@ -44,7 +44,7 @@ class AppSyncSimulator {
                 const originalHandler = handlerModule[lambda.handlerFunction || 'handler']
                 
                 // Wrap handler to inject environment variables
-                handlers[lambda.name] = async (event: any, context?: any, callback?: any) => {
+                const wrappedHandler = async (event: any, context?: any, callback?: any) => {
                     const originalEnv = { ...process.env }
                     
                     // Merge global and lambda-specific environment variables
@@ -60,15 +60,33 @@ class AppSyncSimulator {
                         process.env = originalEnv
                     }
                 }
+                
+                // Use AWS SDK if lambdaEndpoint is provided, otherwise direct invocation
+                if (lambda.lambdaEndpoint) {
+                    console.log(`   → Using AWS SDK invocation at ${lambda.lambdaEndpoint}`)
+                    handlers[lambda.name] = createLambdaHandler({
+                        functionName: lambda.name,
+                        endpoint: lambda.lambdaEndpoint,
+                        region: lambda.lambdaRegion
+                    }, wrappedHandler)
+                } else {
+                    console.log(`   → Using direct invocation`)
+                    handlers[lambda.name] = wrappedHandler
+                }
             } else if (lambda.type === 'dotnet') {
-                handlers[lambda.name] = createDotNetHandler({
-                    endpoint: lambda.endpoint!,
+                // .NET handler uses AWS SDK invocation (LocalStack by default)
+                const endpoint = lambda.lambdaEndpoint || 'http://localhost:4566';
+                console.log(`   → Using AWS SDK invocation at ${endpoint}`);
+                
+                const invoker = new LambdaInvoker({
                     functionName: lambda.functionName!,
-                    environment: {
-                        ...this.lambdaConfig.environment,
-                        ...lambda.environment
-                    }
-                })
+                    endpoint: endpoint,
+                    region: lambda.lambdaRegion
+                });
+                
+                handlers[lambda.name] = async (event: any, context?: any) => {
+                    return invoker.invoke(event, context);
+                };
             }
         }
         
@@ -97,30 +115,71 @@ class AppSyncSimulator {
         console.log('🔧 Initializing AppSync Simulator...');
         console.log('📝 Using JS template interceptors (VTL replacement)');
         
-        // Load Lambda handlers
+        // Load Lambda handlers (without interceptors)
         const handlers = this.createLambdaHandlers()
         
         // Build resolvers config from lambdas-config.json
         const resolversConfig = this.buildResolversConfig()
         
-        // Build a map of data sources with their interceptors based on resolver config
-        const dataSourceInterceptors = new Map<string, string>();
+        // Create a unique handler for each resolver with its specific interceptor
+        // This allows multiple resolvers to use the same data source but with different interceptors
+        const resolverHandlers = new Map<string, any>();
         
         resolversConfig.forEach(resolver => {
+            const resolverKey = `${resolver.typeName}.${resolver.fieldName}`;
+            // Type guard to ensure we're working with unit resolvers
+            if (resolver.kind !== 'UNIT') return;
+            
+            const baseHandler = handlers[resolver.dataSourceName];
+            
             if ('interceptor' in resolver && resolver.interceptor?.requestTemplate) {
-                dataSourceInterceptors.set(resolver.dataSourceName, resolver.interceptor.requestTemplate);
+                console.log(`🔗 Resolver ${resolverKey} → ${resolver.dataSourceName} with interceptor: ${resolver.interceptor.requestTemplate}`);
+                resolverHandlers.set(resolverKey, {
+                    handler: withInterceptors(baseHandler, resolver.interceptor.requestTemplate),
+                    dataSourceName: `${resolver.dataSourceName}_${resolver.typeName}_${resolver.fieldName}`
+                });
+            } else {
+                console.log(`🔗 Resolver ${resolverKey} → ${resolver.dataSourceName} (no interceptor)`);
+                resolverHandlers.set(resolverKey, {
+                    handler: baseHandler,
+                    dataSourceName: resolver.dataSourceName
+                });
             }
         });
         
-        console.log('🔗 Data source interceptors:', Array.from(dataSourceInterceptors.entries()));
+        // Create data sources: base data sources + resolver-specific data sources
+        const dataSources: any[] = [];
+        const createdDataSources = new Set<string>();
+        
+        // Add base data sources (without interceptors)
+        this.lambdaConfig.lambdas.forEach(lambda => {
+            dataSources.push({
+                type: 'AWS_LAMBDA' as const,
+                name: lambda.name,
+                invoke: handlers[lambda.name]
+            });
+            createdDataSources.add(lambda.name);
+        });
+        
+        // Add resolver-specific data sources (with interceptors)
+        resolverHandlers.forEach((handlerInfo, resolverKey) => {
+            if (!createdDataSources.has(handlerInfo.dataSourceName)) {
+                dataSources.push({
+                    type: 'AWS_LAMBDA' as const,
+                    name: handlerInfo.dataSourceName,
+                    invoke: handlerInfo.handler
+                });
+                createdDataSources.add(handlerInfo.dataSourceName);
+            }
+        });
         
         const simulatorConfig: AmplifyAppSyncSimulatorConfig = {
             appSync: {
                 defaultAuthenticationType: {
-                    authenticationType: AmplifyAppSyncSimulatorAuthenticationType.AMAZON_COGNITO_USER_POOLS,
-                    cognitoUserPoolConfig: {},
+                    authenticationType: AmplifyAppSyncSimulatorAuthenticationType.API_KEY,
                 },
                 name: 'api-local',
+                apiKey: 'da2-fakeApiId123456',
                 additionalAuthenticationProviders: [],
             },
             schema: { content: schema },
@@ -134,17 +193,20 @@ class AppSyncSimulator {
                     content: readVTL("lambdaResponseMappingTemplate.vtl"),
                 }
             ],
-            dataSources: this.lambdaConfig.lambdas.map(lambda => ({
-                type: 'AWS_LAMBDA' as const,
-                name: lambda.name,
-                invoke: dataSourceInterceptors.has(lambda.name)
-                    ? withInterceptors(handlers[lambda.name], dataSourceInterceptors.get(lambda.name)!)
-                    : handlers[lambda.name]
-            })),
+            dataSources: dataSources,
             resolvers: resolversConfig.map(resolver => {
-                // Remove interceptor config as AppSync simulator doesn't understand it
+                // Only process unit resolvers
+                if (resolver.kind !== 'UNIT') return resolver;
+                
+                const resolverKey = `${resolver.typeName}.${resolver.fieldName}`;
+                const handlerInfo = resolverHandlers.get(resolverKey);
+                
+                // Remove interceptor config and use the correct data source name
                 const { interceptor, ...cleanResolver } = resolver as any;
-                return cleanResolver;
+                return {
+                    ...cleanResolver,
+                    dataSourceName: handlerInfo?.dataSourceName || resolver.dataSourceName
+                };
             }),
         }
         
